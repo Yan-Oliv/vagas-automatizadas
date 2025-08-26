@@ -4,7 +4,7 @@ import smtplib
 from email.mime.text import MIMEText
 import os
 
-# Variáveis de ambiente (definidas nos Secrets do GitHub)
+# Variáveis de ambiente (seguras via GitHub Secrets)
 SMTP_SERVER = "smtp.gmail.com"
 SMTP_PORT = 587
 EMAIL_SENDER = os.getenv("EMAIL_SENDER")
@@ -18,9 +18,13 @@ def calcular_score(vaga):
     descricao = vaga.get("description", "").lower()
 
     score = 0
-    # Hard skills principais
+    # 🔹 Hard skills principais
     if "flutter" in titulo or "flutter" in descricao:
-        score += 3
+        score += 4
+    if "dart" in titulo or "dart" in descricao:
+        score += 2
+    if "mobile" in titulo or "mobile" in descricao:
+        score += 2
     if "laravel" in titulo or "laravel" in descricao:
         score += 2
     if "mysql" in titulo or "mysql" in descricao:
@@ -30,16 +34,39 @@ def calcular_score(vaga):
     if "developer" in titulo:
         score += 2
 
-    # Penalizações
-    if "senior" in titulo:
-        score -= 2
-    if "advanced english" in descricao or "fluent english" in descricao:
+    # 🔹 Stack complementar
+    if "infrastructure" in descricao or "it support" in descricao or "infra" in descricao:
+        score += 1
+    if "logistics" in descricao or "supply chain" in descricao or "e-commerce" in descricao:
+        score += 1
+
+    # 🔹 Idioma
+    if "portuguese" in descricao or "brazil" in descricao:
+        score += 2
+    if "latam" in descricao:
+        score += 2
+    if "english fluent" in descricao or "advanced english" in descricao or "native english" in descricao:
         score -= 3
+
+    # 🔹 Senioridade
+    if "senior" in titulo or "staff" in titulo or "principal" in titulo or "lead" in titulo:
+        score -= 3
+    if "junior" in titulo or "mid" in titulo or "pleno" in titulo:
+        score += 2
+
+    # 🔹 Tipo de contratação
+    if "deel" in descricao or "remote.com" in descricao or "oyster" in descricao or "eor" in descricao or "worldwide payroll" in descricao:
+        score += 2
+
+    # 🔹 Empresa menor
+    tamanho = vaga.get("company_size", "").lower()
+    if tamanho and any(x in tamanho for x in ["1-10", "11-50", "51-200", "201-500"]):
+        score += 1
 
     return score
 
 
-# Classificação da vaga por país
+# Classificação por país
 def classificar_pais(vaga):
     local = vaga.get("candidate_required_location", "").lower()
 
@@ -59,15 +86,15 @@ def calcular_probabilidade(vaga, score):
 
     if "portuguese" in descricao or "brazil" in vaga.get("candidate_required_location", "").lower():
         return "Alta"
-    if score >= 4:
+    if score >= 6:
         return "Alta"
-    elif 2 <= score < 4:
+    elif 3 <= score < 6:
         return "Média"
     else:
         return "Baixa"
 
 
-# Buscar vagas na API da Remotive
+# Buscar vagas
 def buscar_vagas():
     url = "https://remotive.com/api/remote-jobs"
     response = requests.get(url)
@@ -110,8 +137,8 @@ def montar_email(vagas):
     for pais, lista in vagas_por_pais.items():
         corpo += f"🌎 {pais}\n"
         if lista:
-            for v in lista[:5]:  # limitar exibição por país
-                corpo += f"- {v['titulo']} ({v['empresa']})\n  {v['link']}\n  Probabilidade: {v['probabilidade']}\n"
+            for v in sorted(lista, key=lambda x: x['score'], reverse=True)[:5]:
+                corpo += f"- {v['titulo']} ({v['empresa']})\n  {v['link']}\n  Probabilidade: {v['probabilidade']} | Score: {v['score']}\n"
         else:
             corpo += "Nenhuma vaga encontrada.\n"
         corpo += "\n"
@@ -119,7 +146,7 @@ def montar_email(vagas):
     # Top 5
     corpo += "⭐ Top 5 mais atrativas:\n"
     for v in top_5:
-        corpo += f"- {v['titulo']} ({v['empresa']}) [{v['pais']}]\n  {v['link']}\n  Probabilidade: {v['probabilidade']}\n"
+        corpo += f"- {v['titulo']} ({v['empresa']}) [{v['pais']}]\n  {v['link']}\n  Probabilidade: {v['probabilidade']} | Score: {v['score']}\n"
 
     return corpo
 
